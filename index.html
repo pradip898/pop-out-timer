@@ -324,6 +324,7 @@
     views.splice(views.indexOf(view), 1);
     const w = pipWin; pipWin = null;
     try { w.close(); } catch (e) {}
+    try { window.focus(); } catch (e) {}   // best effort: bring the timer tab to the front (Chrome may refuse)
   }
 
   // --- wiring ---
