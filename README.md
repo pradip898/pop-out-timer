@@ -2,7 +2,7 @@
 
 A Pomodoro timer and a stopwatch that you can pop out into a small always-on-top window, so it stays visible while you work in other apps, and pause or start it without switching back.
 
-URL=
+URL= https://pradip898.github.io/pop-out-timer/
 
 Open `index.html` in a browser. There is nothing to install, and nothing is saved.
 
