@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pop-out Timer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ba4949' stroke-width='12'/></svg>">
+<style>
+  :root { --bg: #ba4949; --card: rgba(255,255,255,.1); --chip: rgba(0,0,0,.15); }
+  body[data-theme="short"] { --bg: #38858a; }
+  body[data-theme="long"]  { --bg: #397097; }
+  body[data-theme="watch"] { --bg: #3d4451; }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: #fff; transition: background .4s;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.25rem;
+    padding: 1rem;
+  }
+  .hint { font-size: .8rem; opacity: .8; text-align: center; max-width: 420px; }
+  .hint:empty { display: none; }
+
+  /* The widget is a size container: the time readout scales with ITS width (cqw), so the
+     same rule fits the page card and any pop-out window size. */
+  #widget {
+    width: min(420px, 100%); background: var(--card); border-radius: 12px; container-type: inline-size;
+    padding: 1.25rem 1.25rem 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  }
+  .tabs, .modes { display: flex; gap: .4rem; width: 100%; justify-content: center; }
+  .tabs button, .modes button {
+    background: transparent; color: #fff; border: 0; border-radius: 6px; cursor: pointer;
+    padding: .35rem .8rem; font: inherit; font-size: .9rem; opacity: .8;
+  }
+  .modes button { font-size: .85rem; padding: .3rem .65rem; }
+  .tabs button[aria-pressed="true"], .modes button[aria-pressed="true"] { background: var(--chip); opacity: 1; font-weight: 600; }
+  .tabs button:hover, .modes button:hover { opacity: 1; }
+
+  /* widest case per mode must fit the card: "3:00:00" ~4em, stopwatch "1:00:00.00" ~5.4em */
+  #time {
+    --fit: 22cqw; --cap: 6.5rem;
+    font-size: clamp(2rem, var(--fit), var(--cap)); white-space: nowrap;
+    font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; margin: .25rem 0;
+  }
+  body[data-theme="watch"] #time { --fit: 17cqw; --cap: 5rem; }
+  #sub { font-size: .85rem; opacity: .8; margin-top: -.5rem; min-height: 1.2em; }
+
+  .controls { display: flex; gap: .6rem; align-items: center; }
+  .controls button {
+    border: 0; cursor: pointer; font: inherit; border-radius: 8px; color: var(--bg);
+    background: #fff; padding: .7rem 0; width: 9rem; font-size: 1.15rem; font-weight: 700; text-transform: uppercase;
+    box-shadow: 0 5px 0 rgba(255,255,255,.55); transition: transform .08s, box-shadow .08s;
+  }
+  .controls button:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(255,255,255,.55); }
+  .controls .ghost {
+    background: var(--chip); color: #fff; box-shadow: none; width: auto; padding: .7rem .9rem; font-size: 1rem; text-transform: none;
+  }
+  .controls .ghost:active { transform: none; opacity: .7; }
+
+  #laps { width: 100%; max-height: 9rem; overflow: auto; font-variant-numeric: tabular-nums; font-size: .85rem; margin: 0; padding: 0; list-style: none; }
+  #laps li { display: flex; justify-content: space-between; padding: .3rem .5rem; border-top: 1px solid rgba(255,255,255,.2); }
+
+  details { width: 100%; font-size: .85rem; }
+  summary { cursor: pointer; opacity: .8; text-align: center; }
+  .settings { display: flex; gap: .75rem; justify-content: center; margin-top: .6rem; flex-wrap: wrap; }
+  .settings label { display: flex; flex-direction: column; gap: .2rem; font-size: .75rem; opacity: .9; }
+  .settings input[type=number] { width: 5rem; padding: .3rem; border: 0; border-radius: 6px; background: var(--chip); color: #fff; font: inherit; }
+  .check { flex-direction: row !important; align-items: center; }
+
+  [hidden] { display: none !important; }
+
+  /* Pop-out layout. The body gets .popped inside the pop-out window, so vh/vw here are that
+     window's own viewport. Structure: switchers pinned top, time fills the middle and is
+     centred, controls pinned bottom, with edge padding that scales with the window. */
+  body.popped { display: block; padding: 0; }
+  .popped #widget {
+    --pad: clamp(13px, 5vmin, 22px);
+    width: 100%; height: 100%; border-radius: 0; background: transparent;
+    padding: var(--pad); gap: calc(var(--pad) * .55); justify-content: flex-start;
+  }
+  .popped .tabs, .popped .modes { gap: .25rem; flex: none; }
+  .popped .tabs button, .popped .modes button { padding: .25rem .6rem; font-size: .75rem; }
+  .popped #time {
+    --fit: min(22cqw, 26vh); --cap: 5.5rem;
+    flex: 1; min-height: 0; margin: 0; display: flex; align-items: center; justify-content: center;
+  }
+  body.popped[data-theme="watch"] #time { --fit: min(17cqw, 26vh); --cap: 4.5rem; }
+  /* padding-bottom offsets the Start button's 5px 3D lip, which is drawn outside its box */
+  .popped .controls { width: 100%; flex: none; gap: .5rem; align-items: stretch; padding-bottom: 5px; }
+  .popped .controls button { padding: .55rem .8rem; }
+  .popped .controls .main { flex: 1; width: auto; font-size: 1rem; }
+  .popped .controls .ghost { min-width: 2.6rem; }
+  .popped details, .popped #laps, .popped #sub { display: none; }
+  /* very short windows: drop the switcher rows so the time + controls never get crushed */
+  @media (max-height: 190px) { .popped .tabs { display: none; } }
+  @media (max-height: 140px) { .popped .modes { display: none; } }
+</style>
+</head>
+<body data-theme="pomo">
+  <div id="widget">
+    <div class="tabs" role="group" aria-label="Timer type">
+      <button data-tab="pomo" aria-pressed="true">Pomodoro</button>
+      <button data-tab="watch" aria-pressed="false">Stopwatch</button>
+    </div>
+    <div class="modes" id="modes" role="group" aria-label="Pomodoro mode">
+      <button data-mode="pomo" aria-pressed="true">Focus</button>
+      <button data-mode="short" aria-pressed="false">Short break</button>
+      <button data-mode="long" aria-pressed="false">Long break</button>
+    </div>
+
+    <div id="time">25:00</div>
+    <div id="sub"></div>
+
+    <div class="controls">
+      <button class="main" id="startBtn" title="Start / pause (Space)">Start</button>
+      <button class="ghost" id="resetBtn" title="Reset (R)">↺</button>
+      <button class="ghost" id="lapBtn" title="Lap (L)" hidden>Lap</button>
+      <button class="ghost" id="skipBtn" title="Next mode">⏭</button>
+      <button class="ghost" id="popBtn" title="Pop out (P)">⧉</button>
+    </div>
+
+    <ul id="laps" hidden></ul>
+
+    <details id="settingsBox">
+      <summary>Settings</summary>
+      <div class="settings">
+        <label>Focus (min)<input type="number" id="dPomo" min="1" max="180" value="25"></label>
+        <label>Short (min)<input type="number" id="dShort" min="1" max="60" value="5"></label>
+        <label>Long (min)<input type="number" id="dLong" min="1" max="60" value="15"></label>
+        <label class="check"><input type="checkbox" id="autoNext"> Auto-start next</label>
+        <label class="check"><input type="checkbox" id="sound" checked> Sound</label>
+      </div>
+    </details>
+  </div>
+
+  <div class="hint" id="hint"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const hint = $('hint');
+  // The timer stays on the page. While popped out, a second copy of it is shown in the pop-out window;
+  // both are "views" of the same state and are updated together.
+  const makeView = root => {
+    const q = s => root.querySelector(s);
+    return { root, body: root.ownerDocument.body, time: q('#time'), sub: q('#sub'), start: q('#startBtn'),
+      lap: q('#lapBtn'), skip: q('#skipBtn'), pop: q('#popBtn'), laps: q('#laps'), modes: q('#modes') };
+  };
+  const main = makeView($('widget'));
+  const views = [main];
+  const state = { tab: 'pomo', mode: 'pomo', running: false, endAt: 0, remaining: 0, startedAt: 0, elapsed: 0, laps: [], cycles: 0 };
+  const dur = { pomo: 25, short: 5, long: 15 };
+  const names = { pomo: 'Time to focus!', short: 'Time for a break!', long: 'Time for a long break!' };
+  let tick = null, pipWin = null;
+
+  const fmt = ms => {
+    const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
+    const p = n => String(n).padStart(2, '0');
+    return (h ? h + ':' + p(m) : p(Math.floor(s / 60))) + ':' + p(ss);
+  };
+  const fmtWatch = ms => {
+    const t = Math.floor(ms / 10), cs = t % 100, s = Math.floor(t / 100) % 60, m = Math.floor(t / 6000) % 60, h = Math.floor(t / 360000);
+    const p = n => String(n).padStart(2, '0');
+    return (h ? h + ':' : '') + p(m) + ':' + p(s) + '.' + p(cs);
+  };
+  const pomoMs = () => dur[state.mode] * 60000;
+  const now = () => performance.now();
+  const curElapsed = () => state.elapsed + (state.running ? now() - state.startedAt : 0);
+  const curRemaining = () => state.running ? Math.max(0, state.endAt - now()) : state.remaining;
+
+  function render() {
+    const watch = state.tab === 'watch';
+    const ms = watch ? curElapsed() : curRemaining();
+    const txt = watch ? fmtWatch(ms) : fmt(Math.ceil(ms / 1000) * 1000);
+    const label = watch ? 'Stopwatch' : names[state.mode];
+    for (const v of views) {
+      v.time.textContent = txt;
+      v.start.textContent = state.running ? 'Pause' : 'Start';
+      v.sub.textContent = watch ? '' : `#${state.cycles + 1} · ${names[state.mode]}`;
+      v.body.ownerDocument.title = state.running || ms ? `${txt} · ${label}` : 'Pop-out Timer';
+    }
+  }
+
+  function loop() {
+    render();
+    if (state.tab === 'pomo' && state.running && curRemaining() <= 0) finish();
+  }
+  function startTicking() { stopTicking(); tick = setInterval(loop, watchTickMs()); }
+  function stopTicking() { clearInterval(tick); tick = null; }
+  const watchTickMs = () => state.tab === 'watch' ? 47 : 200;
+
+  function start() {
+    if (state.running) return;
+    state.running = true;
+    if (state.tab === 'watch') state.startedAt = now();
+    else state.endAt = now() + (state.remaining || pomoMs());
+    startTicking(); render();
+  }
+  function pause() {
+    if (!state.running) return;
+    if (state.tab === 'watch') state.elapsed = curElapsed();
+    else state.remaining = curRemaining();
+    state.running = false; stopTicking(); render();
+  }
+  const toggle = () => state.running ? pause() : start();
+
+  function reset() {
+    state.running = false; stopTicking();
+    state.elapsed = 0; state.laps = []; state.remaining = pomoMs();
+    drawLaps(); render();
+  }
+
+  function setMode(m) {
+    state.mode = m; state.running = false; stopTicking(); state.remaining = pomoMs();
+    sync(); render();
+  }
+  function setTab(t) {
+    if (t === state.tab) return;
+    pause(); state.tab = t;
+    if (t === 'pomo') state.remaining = state.remaining || pomoMs();
+    sync(); render();
+  }
+  function nextMode() {
+    if (state.mode === 'pomo') { state.cycles++; setMode(state.cycles % 4 === 0 ? 'long' : 'short'); }
+    else setMode('pomo');
+  }
+
+  function finish() {
+    const wasFocus = state.mode === 'pomo';
+    state.running = false; stopTicking();
+    beep(); notify(wasFocus ? 'Focus session done — take a break.' : 'Break over — back to focus.');
+    nextMode();
+    if ($('autoNext').checked) start();
+  }
+
+  function lap() {
+    if (state.tab !== 'watch' || !state.running) return;
+    const total = curElapsed(), prev = state.laps.length ? state.laps[0].total : 0;
+    state.laps.unshift({ total, split: total - prev });
+    drawLaps();
+  }
+  function drawLaps() {
+    main.laps.textContent = '';   // the lap list is only shown on the page, not in the pop-out
+    state.laps.forEach((l, i) => {
+      const li = document.createElement('li');
+      li.textContent = `Lap ${state.laps.length - i}`;
+      const s = document.createElement('span'); s.textContent = `${fmtWatch(l.split)}  (${fmtWatch(l.total)})`;
+      li.append(s); main.laps.append(li);
+    });
+    main.laps.hidden = !state.laps.length || state.tab !== 'watch';
+  }
+
+  // sync theme / visible buttons / selected tab+mode with state, in every view
+  function sync() {
+    const watch = state.tab === 'watch';
+    for (const v of views) {
+      v.body.dataset.theme = watch ? 'watch' : state.mode;
+      v.modes.hidden = watch; v.skip.hidden = watch; v.lap.hidden = !watch;
+      v.laps.hidden = !watch || !state.laps.length;
+      v.root.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tab === state.tab));
+      v.root.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === state.mode));
+    }
+    if (state.running) startTicking();
+  }
+
+  // --- alerts ---
+  let ctx;
+  function beep() {
+    if (!$('sound').checked) return;
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      [0, .25, .5].forEach(t => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+        const at = ctx.currentTime + t;
+        g.gain.setValueAtTime(.25, at); g.gain.exponentialRampToValueAtTime(.001, at + .2);
+        o.start(at); o.stop(at + .2);
+      });
+    } catch (e) {}
+  }
+  function notify(msg) {
+    try {
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification('Pop-out Timer', { body: msg });
+    } catch (e) {}
+  }
+
+  // --- pop-out ---
+  const canDocPip = 'documentPictureInPicture' in window;
+  async function popOut() {
+    if (pipWin) { pipWin.close(); return; }
+    hint.textContent = '';
+    let w;
+    try {
+      if (canDocPip) {
+        w = await documentPictureInPicture.requestWindow({ width: 360, height: 230 });
+      } else {
+        w = window.open('', 'popout-timer', 'popup=yes,width=360,height=230');
+        if (!w) { hint.textContent = 'Pop-up blocked — allow pop-ups for this page and try again.'; return; }
+        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+      }
+    } catch (e) { hint.textContent = 'Could not open pop-out: ' + e.message; return; }
+
+    // the pop-out is an empty document: give it the page's CSS and its own copy of the timer
+    const css = [...document.styleSheets].map(s => { try { return [...s.cssRules].map(r => r.cssText).join('\n'); } catch (e) { return ''; } }).join('\n');
+    const st = w.document.createElement('style'); st.textContent = css; w.document.head.append(st);
+    w.document.body.classList.add('popped');
+    const root = w.document.importNode(main.root, true);
+    root.querySelector('details').remove();
+    root.querySelector('#resetBtn').remove();   // no reset in the pop-out (page only)
+    w.document.body.append(root);
+    pipWin = w;
+    const view = makeView(root);
+    views.push(view);
+    root.addEventListener('click', onClick);
+    w.addEventListener('keydown', keyHandler);
+    w.addEventListener('pagehide', () => popBack(view));
+    if (!canDocPip) window.addEventListener('beforeunload', () => w.close(), { once: true });
+    sync(); render();
+  }
+  // pop back: drop the pop-out's view; the timer on the page was never removed
+  function popBack(view) {
+    if (!pipWin) return;
+    views.splice(views.indexOf(view), 1);
+    const w = pipWin; pipWin = null;
+    try { w.close(); } catch (e) {}
+  }
+
+  // --- wiring ---
+  const keyHandler = e => {
+    if (e.target.matches('input, textarea')) return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if ((e.key === 'r' || e.key === 'R') && e.currentTarget === document) reset();   // page only, not the pop-out
+    else if (e.key === 'l' || e.key === 'L') lap();
+    else if (e.key === 'p' || e.key === 'P') popOut();
+  };
+  document.addEventListener('keydown', keyHandler);
+
+  const onClick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.tab) setTab(b.dataset.tab);
+    else if (b.dataset.mode) setMode(b.dataset.mode);
+    else if (b.id === 'startBtn') { toggle(); if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }
+    else if (b.id === 'resetBtn') reset();
+    else if (b.id === 'lapBtn') lap();
+    else if (b.id === 'skipBtn') nextMode();
+    else if (b.id === 'popBtn') popOut();
+  };
+  main.root.addEventListener('click', onClick);
+  ['dPomo', 'dShort', 'dLong'].forEach((id, i) => $(id).addEventListener('change', e => {
+    const key = ['pomo', 'short', 'long'][i];
+    dur[key] = Math.min(+e.target.max, Math.max(1, +e.target.value || dur[key]));
+    e.target.value = dur[key];
+    if (state.tab === 'pomo' && state.mode === key && !state.running) { state.remaining = pomoMs(); render(); }
+  }));
+
+  state.remaining = pomoMs();
+  sync(); render();
+})();
+</script>
+</body>
+</html>

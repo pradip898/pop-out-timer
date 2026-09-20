@@ -1,0 +1,54 @@
+# Only index.html is meant to be published. Everything below stays local.
+
+# Private markdown files, listed by name so README.md still uploads
+# (both cases of CLAUDE.md: git is case-sensitive on GitHub/Linux)
+CLAUDE.md
+claude.md
+instructions to make.md
+plan_PopOutTimer.md
+
+# Obsidian vault + Claude plugin config
+.obsidian/
+.claudian/
+.claude/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets / env (never publish)
+.env
+.env.*
+*.pem
+*.key
+
+# Logs, temp and test output
+*.log
+*.tmp
+*.bak
+tmp/
+temp/
+screenshots/
+*.png.tmp
+
+# Dependencies / build output (not used now, ignored in case a tool is added later)
+node_modules/
+dist/
+build/
+.cache/
+package-lock.json
