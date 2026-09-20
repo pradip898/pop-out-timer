@@ -16,7 +16,7 @@ Open `index.html` in a browser. There is nothing to install, and nothing is save
 - **Pomodoro:** focus, short break and long break (a long break after every 4th focus session). Durations are adjustable in Settings.
 - **Stopwatch:** start, pause, reset and lap.
 - **Pop-out window:** the ⧉ button (or `P`) opens the timer in a small window with Start/Pause, mode switching and the time. Close it to pop back.
-- **Keyboard:** `Space` start/pause, `R` reset (page only), `L` lap, `P` pop out.
+- **Keyboard:** `Space` start/pause, `R` reset, `L` lap, `P` pop out.
 
 #### Browser support
 

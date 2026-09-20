@@ -299,7 +299,7 @@
     w.document.body.classList.add('popped');
     const root = w.document.importNode(main.root, true);
     root.querySelector('details').remove();
-    root.querySelector('#resetBtn').remove();   // no reset in the pop-out (page only)
+    root.querySelector('.controls').insertBefore(root.querySelector('#resetBtn'), root.querySelector('#popBtn'));   // pop-out order: Start, Lap/Skip, Reset, Pop back
     w.document.body.append(root);
     pipWin = w;
     const view = makeView(root);
@@ -323,7 +323,7 @@
   const keyHandler = e => {
     if (e.target.matches('input, textarea')) return;
     if (e.code === 'Space') { e.preventDefault(); toggle(); }
-    else if ((e.key === 'r' || e.key === 'R') && e.currentTarget === document) reset();   // page only, not the pop-out
+    else if (e.key === 'r' || e.key === 'R') reset();
     else if (e.key === 'l' || e.key === 'L') lap();
     else if (e.key === 'p' || e.key === 'P') popOut();
   };
