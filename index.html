@@ -37,13 +37,12 @@
   .tabs button[aria-pressed="true"], .modes button[aria-pressed="true"] { background: var(--chip); opacity: 1; font-weight: 600; }
   .tabs button:hover, .modes button:hover { opacity: 1; }
 
-  /* widest case per mode must fit the card: "3:00:00" ~4em, stopwatch "1:00:00.00" ~5.4em */
+  /* widest case must fit the card: "3:00:00" ~4em */
   #time {
     --fit: 22cqw; --cap: 6.5rem;
     font-size: clamp(2rem, var(--fit), var(--cap)); white-space: nowrap;
     font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; margin: .25rem 0;
   }
-  body[data-theme="watch"] #time { --fit: 17cqw; --cap: 5rem; }
   #sub { font-size: .85rem; opacity: .8; margin-top: -.5rem; min-height: 1.2em; }
 
   .controls { display: flex; gap: .6rem; align-items: center; }
@@ -85,7 +84,6 @@
     --fit: min(22cqw, 26vh); --cap: 5.5rem;
     flex: 1; min-height: 0; margin: 0; display: flex; align-items: center; justify-content: center;
   }
-  body.popped[data-theme="watch"] #time { --fit: min(17cqw, 26vh); --cap: 4.5rem; }
   /* padding-bottom offsets the Start button's 5px 3D lip, which is drawn outside its box */
   .popped .controls { width: 100%; flex: none; gap: .5rem; align-items: stretch; padding-bottom: 5px; }
   .popped .controls button { padding: .55rem .8rem; }
@@ -159,11 +157,6 @@
     const p = n => String(n).padStart(2, '0');
     return (h ? h + ':' + p(m) : p(Math.floor(s / 60))) + ':' + p(ss);
   };
-  const fmtWatch = ms => {
-    const t = Math.floor(ms / 10), cs = t % 100, s = Math.floor(t / 100) % 60, m = Math.floor(t / 6000) % 60, h = Math.floor(t / 360000);
-    const p = n => String(n).padStart(2, '0');
-    return (h ? h + ':' : '') + p(m) + ':' + p(s) + '.' + p(cs);
-  };
   const pomoMs = () => dur[state.mode] * 60000;
   const now = () => performance.now();
   const curElapsed = () => state.elapsed + (state.running ? now() - state.startedAt : 0);
@@ -172,7 +165,7 @@
   function render() {
     const watch = state.tab === 'watch';
     const ms = watch ? curElapsed() : curRemaining();
-    const txt = watch ? fmtWatch(ms) : fmt(Math.ceil(ms / 1000) * 1000);
+    const txt = watch ? fmt(ms) : fmt(Math.ceil(ms / 1000) * 1000);
     const label = watch ? 'Stopwatch' : names[state.mode];
     for (const v of views) {
       v.time.textContent = txt;
@@ -186,9 +179,8 @@
     render();
     if (state.tab === 'pomo' && state.running && curRemaining() <= 0) finish();
   }
-  function startTicking() { stopTicking(); tick = setInterval(loop, watchTickMs()); }
+  function startTicking() { stopTicking(); tick = setInterval(loop, 200); }
   function stopTicking() { clearInterval(tick); tick = null; }
-  const watchTickMs = () => state.tab === 'watch' ? 47 : 200;
 
   function start() {
     if (state.running) return;
@@ -245,7 +237,7 @@
     state.laps.forEach((l, i) => {
       const li = document.createElement('li');
       li.textContent = `Lap ${state.laps.length - i}`;
-      const s = document.createElement('span'); s.textContent = `${fmtWatch(l.split)}  (${fmtWatch(l.total)})`;
+      const s = document.createElement('span'); s.textContent = `${fmt(l.split)}  (${fmt(l.total)})`;
       li.append(s); main.laps.append(li);
     });
     main.laps.hidden = !state.laps.length || state.tab !== 'watch';
